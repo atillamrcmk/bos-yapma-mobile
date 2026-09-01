@@ -1,56 +1,80 @@
-# Welcome to your Expo app 👋
+# BOŞ YAPMA
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Kısa, bilinçli molalar için geliştirilen mobil uygulama. Bu depo, iki geliştiricinin birlikte çalışabileceği temiz bir React Native iskeleti sunar.
 
-## Get started
+## Amaç
 
-1. Install dependencies
+BOŞ YAPMA, kullanıcıya kısa süreli (ör. 3 dakika) odaklanmış bir mola deneyimi sunmayı hedefler. Bu aşamada yalnızca uygulama iskeleti ve geçici geliştirme ana ekranı bulunur; backend, kimlik doğrulama veya oyun implementasyonu yoktur.
 
-   ```bash
-   npm install
-   ```
+## Teknoloji stack'i
 
-2. Start the app
+- [React Native](https://reactnative.dev/) `0.81.x`
+- [Expo](https://expo.dev/) SDK `54` (App Store / Play Store Expo Go ile uyumlu)
+- [TypeScript](https://www.typescriptlang.org/) (strict mode)
+- [Expo Router](https://docs.expo.dev/router/introduction/) (file-based routing)
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Kurulum
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Çalıştırma
 
-### Other setup steps
+```bash
+# Geliştirme sunucusu
+npm start
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+# Android emülatör veya cihaz
+npm run android
 
-## Learn more
+# iOS simülatör (macOS gerekir) veya Expo Go
+npm run ios
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Expo Go ile test etmek için `npm start` sonrası QR kodu tarayın. SDK 54, App Store ve Play Store’daki Expo Go sürümüyle uyumludur.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Kalite kontrolleri
 
-## Join the community
+```bash
+npm run typecheck
+npm run lint
+npm run validate
+```
 
-Join our community of developers creating universal apps.
+## Proje yapısı
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```
+app/                 # Expo Router ekranları
+src/
+  components/        # Paylaşılan UI bileşenleri
+  games/             # Oyun modülleri (henüz boş)
+  session/           # Oturum akışı
+  content/           # İçerik tanımları
+  storage/           # Yerel depolama
+  hooks/             # Özel React hook'ları
+  utils/             # Yardımcı fonksiyonlar
+  constants/         # Sabitler
+  types/             # Paylaşılan TypeScript tipleri
+assets/              # Görseller ve statik dosyalar
+docs/                # Proje dokümantasyonu
+```
+
+## Mevcut MVP kapsamı
+
+- Tek ana ekran (geçici geliştirme ekranı)
+- Uygulama adı, kısa tagline ve **3 Dakika Başlat** butonu
+- iOS ve Android üzerinde Expo ile çalışabilir yapı
+- TypeScript strict mode, ESLint ve temel klasör mimarisi
+
+### Kapsam dışı (şimdilik)
+
+- Backend / API
+- Login / register
+- AI, abonelik, ödeme
+- Firebase / Supabase
+- Oyun implementasyonu
+
+## Lisans
+
+Bu proje için lisans bilgisi `LICENSE` dosyasına bakın.

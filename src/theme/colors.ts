@@ -1,0 +1,36 @@
+export const colors = {
+  backgroundPrimary: '#0C0E13',
+  backgroundSecondary: '#12151C',
+  surface: '#181C25',
+  surfaceElevated: '#1F2430',
+  textPrimary: '#F2F3F5',
+  textSecondary: '#9CA3AF',
+  textMuted: '#6B7280',
+  borderSubtle: '#2A3140',
+  accentPrimary: '#B4F05A',
+  accentPrimaryMuted: 'rgba(180, 240, 90, 0.15)',
+  accentViolet: '#8B7CF6',
+  accentBlue: '#5B9EFF',
+  accentAmber: '#F5B942',
+  accentCoral: '#F07167',
+  success: '#6EE7A0',
+  warning: '#F5B942',
+  error: '#F07167',
+  overlay: 'rgba(0, 0, 0, 0.6)',
+} as const;
+
+export type ColorToken = keyof typeof colors;
+
+export const gameAccents = {
+  reaction: colors.accentPrimary,
+  'odd-one-out': colors.accentViolet,
+  estimate: colors.accentBlue,
+  'memory-grid': colors.accentAmber,
+  'quick-math': colors.accentCoral,
+  'which-came-first': '#7DD3FC',
+  'color-match': '#F472B6',
+  sequence: colors.accentViolet,
+  'target-tap': colors.accentPrimary,
+  'flash-count': colors.accentAmber,
+  timing: colors.accentBlue,
+} as const;
