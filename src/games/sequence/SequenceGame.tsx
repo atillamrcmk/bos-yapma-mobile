@@ -87,6 +87,7 @@ export function SequenceGame({ onComplete, seed, difficulty }: GameComponentProp
         onComplete({
           gameId: 'sequence',
           score: correct ? 100 : 0,
+          isSuccess: correct,
           correct,
           durationMs: nowMs() - startAtRef.current,
           startedAt: startAtRef.current,

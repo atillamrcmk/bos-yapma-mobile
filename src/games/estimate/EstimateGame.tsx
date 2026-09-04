@@ -13,11 +13,14 @@ type Phase = 'input' | 'result';
 
 const THUMB_SIZE = 28;
 
-function scoreEstimate(user: number, target: number, min: number, max: number): number {
-  const range = max - min || 1;
-  const error = Math.abs(user - target) / range;
-  return Math.round(Math.max(0, (1 - error) * 100));
+/** Nearness vs true answer: 100 = exact, 85 = ±15% tolerance edge. */
+function proximityScore(user: number, target: number): number {
+  const denom = Math.abs(target) || 1;
+  const relativeError = Math.abs(user - target) / denom;
+  return Math.round(Math.max(0, (1 - relativeError) * 100));
 }
+
+const SUCCESS_PROXIMITY = 85;
 
 export function EstimateGame({ onComplete, seed }: GameComponentProps) {
   const question = useMemo(() => pickFromSeed(estimateQuestions, seed), [seed]);
@@ -83,26 +86,30 @@ export function EstimateGame({ onComplete, seed }: GameComponentProps) {
     if (completingRef.current) return;
     completingRef.current = true;
 
-    const accuracy = scoreEstimate(userValue, question.target, question.min, question.max);
-    const diff = Math.abs(userValue - question.target);
+    const accuracy = proximityScore(userValue, question.target);
+    const isSuccess = accuracy >= SUCCESS_PROXIMITY;
+    const relativeError =
+      Math.abs(userValue - question.target) / (Math.abs(question.target) || 1);
     const message =
-      diff <= range * 0.05
+      relativeError <= 0.05
         ? 'Neredeyse tam isabet.'
-        : diff <= range * 0.15
+        : relativeError <= 0.15
           ? 'Oldukça yakındın.'
-          : diff <= range * 0.3
+          : relativeError <= 0.3
             ? 'Fena değil.'
             : 'Bir dahaki sefere.';
 
     setFeedback(message);
     setPhase('result');
-    haptics.success();
+    if (isSuccess) haptics.success();
+    else haptics.warning();
 
     setTimeout(() => {
       onComplete({
         gameId: 'estimate',
         score: accuracy,
-        correct: accuracy >= 70,
+        isSuccess,
+        correct: isSuccess,
         durationMs: nowMs() - startAtRef.current,
         startedAt: startAtRef.current,
         completedAt: nowMs(),

@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -12,9 +13,11 @@ import { colors, gameAccents, spacing, typography } from '@/theme';
 import { haptics } from '@/utils/haptics';
 import { nowMs } from '@/utils/time';
 import { createSeededRandom } from '@/utils/seeded-random';
+import { playUiClick } from '@/utils/ui-click-sound';
 
-const GRID_SIZE = 4;
 const SYMBOLS = ['●', '■', '▲', '◆'] as const;
+const GRID_MIN = 4;
+const GRID_MAX = 7;
 
 interface CellData {
   id: number;
@@ -22,7 +25,11 @@ interface CellData {
   isOdd: boolean;
 }
 
-function generateGrid(seed: number): CellData[] {
+function randomGridSize(): number {
+  return GRID_MIN + Math.floor(Math.random() * (GRID_MAX - GRID_MIN + 1));
+}
+
+function generateGrid(seed: number, gridSize: number): CellData[] {
   const random = createSeededRandom(seed);
   const normalSymbol = SYMBOLS[Math.floor(random() * SYMBOLS.length)]!;
   let oddSymbol = SYMBOLS[Math.floor(random() * SYMBOLS.length)]!;
@@ -30,10 +37,11 @@ function generateGrid(seed: number): CellData[] {
     oddSymbol = SYMBOLS[Math.floor(random() * SYMBOLS.length)]!;
   }
 
-  const oddIndex = Math.floor(random() * GRID_SIZE * GRID_SIZE);
+  const total = gridSize * gridSize;
+  const oddIndex = Math.floor(random() * total);
   const cells: CellData[] = [];
 
-  for (let i = 0; i < GRID_SIZE * GRID_SIZE; i += 1) {
+  for (let i = 0; i < total; i += 1) {
     const isOdd = i === oddIndex;
     cells.push({
       id: i,
@@ -46,16 +54,37 @@ function generateGrid(seed: number): CellData[] {
 }
 
 export function OddOneOutGame({ onComplete, seed }: GameComponentProps) {
-  const { width } = useWindowDimensions();
   const startAtRef = useRef(nowMs());
   const [answered, setAnswered] = useState(false);
   const [wrongId, setWrongId] = useState<number | null>(null);
+  const [successId, setSuccessId] = useState<number | null>(null);
 
-  const cells = useMemo(() => generateGrid(seed), [seed]);
-  const gap = spacing.sm;
+  const gridSize = useMemo(() => randomGridSize(), []);
+  const cells = useMemo(() => generateGrid(seed, gridSize), [gridSize, seed]);
+
+  const windowWidth = Dimensions.get('window').width;
+  const gap = Math.max(4, Math.round(spacing.sm * (GRID_MAX / gridSize) * 0.55));
   const horizontalPadding = spacing.lg * 2;
-  const cellSize = Math.floor((width - horizontalPadding - gap * (GRID_SIZE - 1)) / GRID_SIZE);
+  const availableWidth = windowWidth - horizontalPadding;
+  const cellSize = Math.floor((availableWidth - gap * (gridSize - 1)) / gridSize);
   const accent = gameAccents['odd-one-out'];
+
+  const shakeX = useSharedValue(0);
+
+  const gridAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shakeX.value }],
+  }));
+
+  const triggerShake = useCallback(() => {
+    shakeX.value = withSequence(
+      withTiming(-8, { duration: 45 }),
+      withTiming(8, { duration: 45 }),
+      withTiming(-6, { duration: 40 }),
+      withTiming(6, { duration: 40 }),
+      withTiming(-3, { duration: 35 }),
+      withTiming(0, { duration: 35 }),
+    );
+  }, [shakeX]);
 
   const handleSelect = useCallback(
     (cell: CellData) => {
@@ -63,42 +92,66 @@ export function OddOneOutGame({ onComplete, seed }: GameComponentProps) {
 
       if (cell.isOdd) {
         setAnswered(true);
+        setSuccessId(cell.id);
         haptics.success();
         setTimeout(() => {
           onComplete({
             gameId: 'odd-one-out',
             score: 100,
+            isSuccess: true,
             correct: true,
             durationMs: nowMs() - startAtRef.current,
             startedAt: startAtRef.current,
             completedAt: nowMs(),
+            metadata: { gridSize },
           });
         }, 600);
       } else {
+        setAnswered(true);
         setWrongId(cell.id);
+        triggerShake();
         haptics.warning();
-        setTimeout(() => setWrongId(null), 400);
+        setTimeout(() => {
+          onComplete({
+            gameId: 'odd-one-out',
+            score: 0,
+            isSuccess: false,
+            correct: false,
+            durationMs: nowMs() - startAtRef.current,
+            startedAt: startAtRef.current,
+            completedAt: nowMs(),
+            metadata: { gridSize },
+          });
+        }, 500);
       }
     },
-    [answered, onComplete],
+    [answered, gridSize, onComplete, triggerShake],
   );
+
+  const gridWidth = cellSize * gridSize + gap * (gridSize - 1);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Farklı olanı bul</Text>
-      <View style={[styles.grid, { gap, maxWidth: cellSize * GRID_SIZE + gap * (GRID_SIZE - 1) }]}>
+      <Animated.View
+        style={[
+          styles.grid,
+          gridAnimatedStyle,
+          { gap, width: gridWidth },
+        ]}
+      >
         {cells.map((cell) => (
           <Cell
             key={cell.id}
             accent={accent}
             cell={cell}
-            correct={answered && cell.isOdd}
+            correct={successId === cell.id}
             onPress={() => handleSelect(cell)}
             size={cellSize}
             wrong={wrongId === cell.id}
           />
         ))}
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -122,32 +175,51 @@ function Cell({
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
-    borderColor: wrong ? colors.error : correct ? colors.success : colors.borderSubtle,
   }));
 
-  const handlePress = () => {
+  useEffect(() => {
+    if (!correct) return;
     scale.value = withSequence(
-      withTiming(0.92, { duration: 80 }),
-      withTiming(1.05, { duration: 120 }),
+      withSpring(1.28, { damping: 8, stiffness: 280 }),
+      withSpring(1.1, { damping: 12, stiffness: 200 }),
     );
+  }, [correct, scale]);
+
+  const onCellPress = () => {
+    playUiClick();
+    if (!correct) {
+      scale.value = withSequence(
+        withTiming(0.92, { duration: 70 }),
+        withTiming(1, { duration: 100 }),
+      );
+    }
     onPress();
   };
 
   return (
     <Animated.View style={animatedStyle}>
       <Pressable
-        onPress={handlePress}
+        onPress={onCellPress}
         style={[
           styles.cell,
           {
             width: size,
             height: size,
+            borderRadius: Math.max(6, Math.round(size * 0.18)),
             borderColor: wrong ? colors.error : correct ? accent : colors.borderSubtle,
             backgroundColor: correct ? `${accent}22` : colors.surface,
           },
         ]}
       >
-        <Text style={[styles.symbol, { color: correct ? accent : colors.textPrimary }]}>
+        <Text
+          style={[
+            styles.symbol,
+            {
+              color: correct ? accent : colors.textPrimary,
+              fontSize: Math.max(12, Math.min(28, size * 0.45)),
+            },
+          ]}
+        >
           {cell.symbol}
         </Text>
       </Pressable>
@@ -173,7 +245,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cell: {
-    borderRadius: 12,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',

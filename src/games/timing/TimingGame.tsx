@@ -42,6 +42,7 @@ export function TimingGame({ onComplete, seed }: GameComponentProps) {
       onComplete({
         gameId: 'timing',
         score: Math.max(0, Math.round(100 - absDiff * 100)),
+        isSuccess: absDiff <= 0.3,
         correct: absDiff <= 0.3,
         durationMs: nowMs() - startAtRef.current,
         startedAt: startAtRef.current,

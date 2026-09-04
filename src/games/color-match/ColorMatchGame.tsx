@@ -58,6 +58,7 @@ export function ColorMatchGame({ onComplete, seed }: GameComponentProps) {
           onComplete({
             gameId: 'color-match',
             score: Math.round((nextCorrect / ROUNDS) * 100),
+            isSuccess: nextCorrect === ROUNDS,
             correct: nextCorrect === ROUNDS,
             durationMs: nowMs() - startAtRef.current,
             startedAt: startAtRef.current,

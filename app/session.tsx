@@ -1,12 +1,14 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { ComboBadge } from '@/components/ui/ComboBadge';
 import { GameHeader } from '@/components/ui/GameHeader';
 import { Screen } from '@/components/ui/Screen';
 import { gameDefinitionMap } from '@/games/definitions';
 import { getGameComponent } from '@/games/registry';
+import { ComboProvider, useCombo } from '@/session/combo-context';
 import {
   createSessionConfig,
   getSessionProgress,
@@ -67,10 +69,11 @@ function buildSummary(
   };
 }
 
-export default function SessionScreen() {
+function SessionScreenInner() {
   const router = useRouter();
   const params = useLocalSearchParams<{ duration?: string }>();
   const durationMinutes = parseDuration(params.duration);
+  const { currentCombo, pulseKey, bumpCombo, resetCombo } = useCombo();
 
   const config = useMemo(() => createSessionConfig(durationMinutes), [durationMinutes]);
   const difficulty = getDifficultyForDuration(durationMinutes);
@@ -149,6 +152,12 @@ export default function SessionScreen() {
         durationMs: completedAt - (result.startedAt ?? challengeStartedAtRef.current),
       };
 
+      if (enriched.isSuccess) {
+        bumpCombo();
+      } else {
+        resetCombo();
+      }
+
       resultsRef.current = [...resultsRef.current, enriched];
       playedIdsRef.current = [...playedIdsRef.current, enriched.gameId];
       playedCategoriesRef.current = [
@@ -169,7 +178,7 @@ export default function SessionScreen() {
       setCurrentChallenge(next);
       setChallengeNumber((n) => n + 1);
     },
-    [config.targetDurationMs, finishSession, pickNextChallenge],
+    [bumpCombo, config.targetDurationMs, finishSession, pickNextChallenge, resetCombo],
   );
 
   const handleExit = () => {
@@ -199,8 +208,17 @@ export default function SessionScreen() {
             seed={currentChallenge.seed}
           />
         </Animated.View>
+        <ComboBadge combo={currentCombo} pulseKey={pulseKey} />
       </View>
     </Screen>
+  );
+}
+
+export default function SessionScreen() {
+  return (
+    <ComboProvider>
+      <SessionScreenInner />
+    </ComboProvider>
   );
 }
 

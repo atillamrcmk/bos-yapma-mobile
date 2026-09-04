@@ -87,6 +87,7 @@ export function FlashCountGame({ onComplete, seed }: GameComponentProps) {
         onComplete({
           gameId: 'flash-count',
           score: Math.round((nextCorrect / ROUNDS) * 100),
+          isSuccess: nextCorrect === ROUNDS,
           correct: nextCorrect === ROUNDS,
           durationMs: nowMs() - startAtRef.current,
           startedAt: startAtRef.current,

@@ -30,6 +30,7 @@ export function WhichCameFirstGame({ onComplete, seed }: GameComponentProps) {
       onComplete({
         gameId: 'which-came-first',
         score: correct ? 100 : 0,
+        isSuccess: correct,
         correct,
         durationMs: nowMs() - startAtRef.current,
         startedAt: startAtRef.current,

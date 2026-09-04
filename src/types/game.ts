@@ -17,6 +17,9 @@ export type GameCategory =
 export interface GameResult {
   gameId: GameId;
   score: number;
+  /** Challenge-level success used by session combo (seri). */
+  isSuccess: boolean;
+  /** @deprecated Prefer `isSuccess` for combo; kept for stats compatibility. */
   correct?: boolean;
   durationMs: number;
   startedAt: number;

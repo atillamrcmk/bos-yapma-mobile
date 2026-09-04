@@ -18,7 +18,7 @@ type Phase = 'waiting' | 'ready' | 'go' | 'result' | 'early';
 
 const MIN_DELAY = 800;
 const MAX_DELAY = 2500;
-const RESULT_DISPLAY_MS = 700;
+const RESULT_DISPLAY_MS = 2000;
 
 export function ReactionGame({ onComplete, seed }: GameComponentProps) {
   const [phase, setPhase] = useState<Phase>('waiting');
@@ -65,6 +65,11 @@ export function ReactionGame({ onComplete, seed }: GameComponentProps) {
     (ms: number, message: string, correct: boolean) => {
       if (completeRef.current) return;
       completeRef.current = true;
+
+      // Drop the green action flash immediately so the result screen is readable.
+      bgOpacity.value = withTiming(0, { duration: 100 });
+      scale.value = withTiming(1, { duration: 100 });
+
       setReactionMs(ms);
       setFeedback(message);
       setPhase('result');
@@ -73,6 +78,7 @@ export function ReactionGame({ onComplete, seed }: GameComponentProps) {
         onComplete({
           gameId: 'reaction',
           score: correct ? Math.max(0, 1000 - ms) : 0,
+          isSuccess: correct,
           correct,
           durationMs: nowMs() - startAtRef.current,
           startedAt: startAtRef.current,
@@ -81,10 +87,12 @@ export function ReactionGame({ onComplete, seed }: GameComponentProps) {
         });
       }, RESULT_DISPLAY_MS);
     },
-    [onComplete],
+    [bgOpacity, onComplete, scale],
   );
 
   const handlePress = () => {
+    if (phase === 'result' || completeRef.current) return;
+
     if (phase === 'waiting' || phase === 'ready') {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setPhase('early');
@@ -113,7 +121,11 @@ export function ReactionGame({ onComplete, seed }: GameComponentProps) {
   const isGo = phase === 'go';
 
   return (
-    <Pressable style={styles.container} onPress={handlePress}>
+    <Pressable
+      disabled={phase === 'result'}
+      onPress={handlePress}
+      style={styles.container}
+    >
       <Animated.View
         style={[styles.flash, { backgroundColor: accent }, bgStyle]}
         pointerEvents="none"
@@ -127,7 +139,7 @@ export function ReactionGame({ onComplete, seed }: GameComponentProps) {
         ) : phase === 'result' ? (
           <>
             <Text style={[styles.resultValue, { color: accent }]}>{reactionMs} ms</Text>
-            <Text style={styles.subtitle}>{feedback}</Text>
+            <Text style={styles.resultFeedback}>{feedback}</Text>
           </>
         ) : isGo ? (
           <Text style={[styles.goText, { color: accent }]}>ŞİMDİ</Text>
@@ -172,6 +184,14 @@ const styles = StyleSheet.create({
   },
   resultValue: {
     ...typography.metric,
+    fontSize: 56,
+    lineHeight: 64,
+    textAlign: 'center',
+  },
+  resultFeedback: {
+    ...typography.heading,
+    fontSize: 20,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   earlyTitle: {

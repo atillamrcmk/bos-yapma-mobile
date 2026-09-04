@@ -62,6 +62,7 @@ export function QuickMathGame({ onComplete, seed, difficulty }: GameComponentPro
         onComplete({
           gameId: 'quick-math',
           score: correct ? 100 : 0,
+          isSuccess: correct,
           correct,
           durationMs: nowMs() - startAtRef.current,
           startedAt: startAtRef.current,

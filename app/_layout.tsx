@@ -8,11 +8,13 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { colors } from '@/theme';
+import { preloadUiClickSound } from '@/utils/ui-click-sound';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   useEffect(() => {
+    void preloadUiClickSound();
     SplashScreen.hideAsync();
   }, []);
 
