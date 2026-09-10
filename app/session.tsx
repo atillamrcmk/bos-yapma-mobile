@@ -49,7 +49,10 @@ function buildSummary(
   const memoryTotal = memoryResult?.metadata?.total as number | undefined;
 
   const knowledgeGames = results.filter(
-    (r) => r.gameId === 'estimate' || r.gameId === 'which-came-first',
+    (r) =>
+      r.gameId === 'estimate' ||
+      r.gameId === 'which-came-first' ||
+      r.gameId === 'order-three',
   );
 
   return {
@@ -83,6 +86,8 @@ function SessionScreenInner() {
   const resultsRef = useRef<GameResult[]>([]);
   const playedIdsRef = useRef<GameId[]>([]);
   const playedCategoriesRef = useRef<GameCategory[]>([]);
+  const usedKnowledgeIdsRef = useRef<string[]>([]);
+  const [excludeContentIds, setExcludeContentIds] = useState<string[]>([]);
   const seedCounterRef = useRef(0);
   const finishingRef = useRef(false);
 
@@ -165,6 +170,16 @@ function SessionScreenInner() {
         gameDefinitionMap[enriched.gameId].category,
       ];
 
+      const itemIds = enriched.metadata?.itemIds;
+      if (Array.isArray(itemIds)) {
+        const nextExcluded = [
+          ...usedKnowledgeIdsRef.current,
+          ...itemIds.filter((id): id is string => typeof id === 'string'),
+        ];
+        usedKnowledgeIdsRef.current = nextExcluded;
+        setExcludeContentIds(nextExcluded);
+      }
+
       const elapsed = completedAt - sessionStartedAtRef.current;
       setSessionProgress(getSessionProgress(elapsed, config.targetDurationMs));
 
@@ -204,6 +219,7 @@ function SessionScreenInner() {
         >
           <GameComponent
             difficulty={currentChallenge.difficulty}
+            excludeContentIds={excludeContentIds}
             onComplete={handleComplete}
             seed={currentChallenge.seed}
           />

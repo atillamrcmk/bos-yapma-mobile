@@ -5,6 +5,7 @@ import { EstimateGame } from '@/games/estimate/EstimateGame';
 import { FlashCountGame } from '@/games/flash-count/FlashCountGame';
 import { MemoryGridGame } from '@/games/memory-grid/MemoryGridGame';
 import { OddOneOutGame } from '@/games/odd-one-out/OddOneOutGame';
+import { OrderThreeGame } from '@/games/order-three/OrderThreeGame';
 import { QuickMathGame } from '@/games/quick-math/QuickMathGame';
 import { ReactionGame } from '@/games/reaction/ReactionGame';
 import { SequenceGame } from '@/games/sequence/SequenceGame';
@@ -21,6 +22,7 @@ const components: Record<GameId, ComponentType<GameComponentProps>> = {
   'memory-grid': MemoryGridGame,
   'quick-math': QuickMathGame,
   'which-came-first': WhichCameFirstGame,
+  'order-three': OrderThreeGame,
   'color-match': ColorMatchGame,
   sequence: SequenceGame,
   'target-tap': TargetTapGame,

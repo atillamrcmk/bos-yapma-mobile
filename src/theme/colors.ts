@@ -28,6 +28,7 @@ export const gameAccents = {
   'memory-grid': colors.accentAmber,
   'quick-math': colors.accentCoral,
   'which-came-first': '#7DD3FC',
+  'order-three': '#A5B4FC',
   'color-match': '#F472B6',
   sequence: colors.accentViolet,
   'target-tap': colors.accentPrimary,

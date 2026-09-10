@@ -1,32 +1,65 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { whichCameFirstPairs } from '@/content/which-came-first';
+import { FeedbackOverlay } from '@/components/ui/FeedbackOverlay';
+import { buildWhichCameFirstChallenge } from '@/content/knowledge';
 import type { GameComponentProps } from '@/types/game';
-import { colors, gameAccents, radius, spacing, typography } from '@/theme';
+import { colors, gameAccents, radius, spacing, touchTargetMin, typography } from '@/theme';
 import { haptics } from '@/utils/haptics';
 import { nowMs } from '@/utils/time';
-import { pickFromSeed } from '@/utils/seeded-random';
 
 type Phase = 'pick' | 'result';
 
-export function WhichCameFirstGame({ onComplete, seed }: GameComponentProps) {
-  const pair = useMemo(() => pickFromSeed(whichCameFirstPairs, seed), [seed]);
+const FEEDBACK_MS = 1200;
+
+export function WhichCameFirstGame({
+  onComplete,
+  seed,
+  difficulty,
+  excludeContentIds,
+}: GameComponentProps) {
+  const challenge = useMemo(
+    () => buildWhichCameFirstChallenge(seed, difficulty, excludeContentIds ?? []),
+    [seed, difficulty, excludeContentIds],
+  );
   const startAtRef = useRef(nowMs());
+  const completedRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [phase, setPhase] = useState<Phase>('pick');
-  const [selected, setSelected] = useState<'a' | 'b' | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const accent = gameAccents['which-came-first'];
 
-  const handlePick = (choice: 'a' | 'b') => {
-    if (phase !== 'pick') return;
-    setSelected(choice);
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (challenge || completedRef.current) return;
+    completedRef.current = true;
+    onComplete({
+      gameId: 'which-came-first',
+      score: 0,
+      isSuccess: false,
+      durationMs: 0,
+      startedAt: startAtRef.current,
+      completedAt: nowMs(),
+      metadata: { reason: 'insufficient-content' },
+    });
+  }, [challenge, onComplete]);
+
+  const handlePick = (choiceId: string) => {
+    if (phase !== 'pick' || !challenge || completedRef.current) return;
+    completedRef.current = true;
+    setSelectedId(choiceId);
     setPhase('result');
-    const correct = choice === pair.firstId;
+
+    const correct = choiceId === challenge.earlierId;
     if (correct) haptics.success();
     else haptics.warning();
 
-    const yearDiff = Math.abs(pair.yearA - pair.yearB);
-    setTimeout(() => {
+    timerRef.current = setTimeout(() => {
       onComplete({
         gameId: 'which-came-first',
         score: correct ? 100 : 0,
@@ -35,15 +68,26 @@ export function WhichCameFirstGame({ onComplete, seed }: GameComponentProps) {
         durationMs: nowMs() - startAtRef.current,
         startedAt: startAtRef.current,
         completedAt: nowMs(),
-        metadata: { yearDiff },
+        metadata: {
+          yearDiff: challenge.yearDiff,
+          itemIds: [challenge.left.id, challenge.right.id],
+          pairKey: challenge.pairKey,
+        },
       });
-    }, 1400);
+    }, FEEDBACK_MS);
   };
 
-  const first = pair.firstId === 'a' ? pair.optionA : pair.optionB;
-  const firstYear = pair.firstId === 'a' ? pair.yearA : pair.yearB;
-  const second = pair.firstId === 'a' ? pair.optionB : pair.optionA;
-  const secondYear = pair.firstId === 'a' ? pair.yearB : pair.yearA;
+  if (!challenge) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>İçerik hazırlanamadı</Text>
+      </View>
+    );
+  }
+
+  const earlier = challenge.earlierId === challenge.left.id ? challenge.left : challenge.right;
+  const later = challenge.earlierId === challenge.left.id ? challenge.right : challenge.left;
+  const isCorrect = selectedId === challenge.earlierId;
 
   return (
     <View style={styles.container}>
@@ -51,27 +95,25 @@ export function WhichCameFirstGame({ onComplete, seed }: GameComponentProps) {
 
       {phase === 'pick' ? (
         <View style={styles.options}>
-          <OptionCard accent={accent} label={pair.optionA} onPress={() => handlePick('a')} />
-          <OptionCard accent={accent} label={pair.optionB} onPress={() => handlePick('b')} />
+          <OptionCard
+            accent={accent}
+            label={challenge.left.label}
+            onPress={() => handlePick(challenge.left.id)}
+          />
+          <OptionCard
+            accent={accent}
+            label={challenge.right.label}
+            onPress={() => handlePick(challenge.right.id)}
+          />
         </View>
-      ) : (
-        <View style={styles.result}>
-          <Text style={styles.resultLine}>
-            {first} — {firstYear}
-          </Text>
-          <Text style={styles.resultLine}>
-            {second} — {secondYear}
-          </Text>
-          <Text
-            style={[
-              styles.feedback,
-              { color: selected === pair.firstId ? accent : colors.textSecondary },
-            ]}
-          >
-            {Math.abs(pair.yearA - pair.yearB)} yıl fark.
-          </Text>
-        </View>
-      )}
+      ) : null}
+
+      <FeedbackOverlay
+        visible={phase === 'result'}
+        message={isCorrect ? 'Doğru' : 'Doğru sıra şöyleydi'}
+        subMessage={`${earlier.label} — ${earlier.displayValue}\n${later.label} — ${later.displayValue}\n${challenge.yearDiff} yıl fark. ${challenge.fact}`}
+        accentColor={isCorrect ? accent : colors.textSecondary}
+      />
     </View>
   );
 }
@@ -88,7 +130,13 @@ function OptionCard({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed, { borderColor: accent }]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        styles.card,
+        pressed && styles.cardPressed,
+        { borderColor: accent },
+      ]}
     >
       <Text style={styles.initial}>{label.charAt(0)}</Text>
       <Text style={styles.cardLabel}>{label}</Text>
@@ -119,7 +167,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
     gap: spacing.sm,
-    minHeight: 120,
+    minHeight: Math.max(120, touchTargetMin * 2),
     justifyContent: 'center',
   },
   cardPressed: {
@@ -135,18 +183,5 @@ const styles = StyleSheet.create({
     ...typography.title,
     fontSize: 22,
     textAlign: 'center',
-  },
-  result: {
-    gap: spacing.md,
-    marginTop: spacing.xl,
-    alignItems: 'center',
-  },
-  resultLine: {
-    ...typography.heading,
-    textAlign: 'center',
-  },
-  feedback: {
-    ...typography.body,
-    marginTop: spacing.md,
   },
 });

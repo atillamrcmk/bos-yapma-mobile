@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundPrimary,
   },
   flash: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   content: {
     flex: 1,

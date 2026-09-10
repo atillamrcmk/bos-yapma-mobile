@@ -21,6 +21,13 @@ export const gameMetadata: GameMetadata[] = [
     weight: 1,
     enabled: true,
   },
+  {
+    id: 'order-three',
+    category: 'knowledge',
+    estimatedDurationMs: 18_000,
+    weight: 1,
+    enabled: true,
+  },
   { id: 'color-match', category: 'visual', estimatedDurationMs: 20_000, weight: 1, enabled: true },
   { id: 'sequence', category: 'logic', estimatedDurationMs: 12_000, weight: 1, enabled: true },
   { id: 'target-tap', category: 'reflex', estimatedDurationMs: 18_000, weight: 1, enabled: true },

@@ -9,7 +9,8 @@ export type GameId =
   | 'sequence'
   | 'target-tap'
   | 'flash-count'
-  | 'timing';
+  | 'timing'
+  | 'order-three';
 
 export type GameCategory =
   'reflex' | 'memory' | 'knowledge' | 'logic' | 'math' | 'visual' | 'timing';
@@ -31,4 +32,6 @@ export interface GameComponentProps {
   onComplete: (result: GameResult) => void;
   difficulty: number;
   seed: number;
+  /** Optional session-scoped content exclusions for knowledge games. */
+  excludeContentIds?: string[];
 }

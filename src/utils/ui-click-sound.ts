@@ -1,22 +1,21 @@
-import { Audio, type AVPlaybackSource } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
 
-const UI_CLICK = require('../../assets/sounds/ui-click.wav') as AVPlaybackSource;
+const UI_CLICK = require('../../assets/sounds/ui-click.wav');
 
 const POOL_SIZE = 4;
 const VOLUME = 0.65;
 
-let pool: Audio.Sound[] = [];
+let pool: AudioPlayer[] = [];
 let cursor = 0;
 let loading: Promise<void> | null = null;
 
 async function ensureAudioMode(): Promise<void> {
-  await Audio.setAudioModeAsync({
-    playsInSilentModeIOS: true,
-    allowsRecordingIOS: false,
-    staysActiveInBackground: false,
-    shouldDuckAndroid: true,
-    playThroughEarpieceAndroid: false,
+  await setAudioModeAsync({
+    playsInSilentMode: true,
+    allowsRecording: false,
+    shouldPlayInBackground: false,
+    interruptionModeAndroid: 'duckOthers',
   });
 }
 
@@ -29,16 +28,11 @@ export async function preloadUiClickSound(): Promise<void> {
   loading = (async () => {
     try {
       await ensureAudioMode();
-      const created = await Promise.all(
-        Array.from({ length: POOL_SIZE }, () =>
-          Audio.Sound.createAsync(UI_CLICK, {
-            shouldPlay: false,
-            volume: VOLUME,
-            isLooping: false,
-          }).then(({ sound }) => sound),
-        ),
-      );
-      pool = created;
+      pool = Array.from({ length: POOL_SIZE }, () => {
+        const player = createAudioPlayer(UI_CLICK);
+        player.volume = VOLUME;
+        return player;
+      });
       cursor = 0;
     } catch {
       pool = [];
@@ -69,9 +63,9 @@ async function playUiClickAsync(): Promise<void> {
     const instance = pool[cursor % pool.length]!;
     cursor = (cursor + 1) % pool.length;
 
-    // replayAsync seeks to 0 and plays — lower latency than separate setPosition + play.
-    await instance.setVolumeAsync(VOLUME);
-    await instance.replayAsync();
+    instance.volume = VOLUME;
+    await instance.seekTo(0);
+    instance.play();
   } catch {
     // Audio may be unavailable on simulators / restricted devices.
   }
@@ -81,13 +75,11 @@ export async function unloadUiClickSound(): Promise<void> {
   const current = pool;
   pool = [];
   cursor = 0;
-  await Promise.all(
-    current.map(async (sound) => {
-      try {
-        await sound.unloadAsync();
-      } catch {
-        // ignore
-      }
-    }),
-  );
+  for (const player of current) {
+    try {
+      (player as unknown as { release(): void }).release();
+    } catch {
+      // ignore
+    }
+  }
 }
