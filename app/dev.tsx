@@ -1,31 +1,54 @@
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/ui/Screen';
 import { getEnabledGames } from '@/games/definitions';
-import { colors, radius, spacing, typography } from '@/theme';
+import type { GameId } from '@/types/game';
+import { colors, spacing, typography } from '@/theme';
 
-export default function DevGameScreen() {
+const SHOWCASE: GameId[] = [
+  'untangle',
+  'stop-the-line',
+  'fit-it',
+  'spot-change',
+  'perfect-circle',
+];
+
+export default function DevGamesLabScreen() {
+  if (!__DEV__) {
+    return <Redirect href="/" />;
+  }
+
   const router = useRouter();
-  const games = useMemo(() => getEnabledGames(), []);
+  const games = useMemo(() => {
+    const all = getEnabledGames();
+    const showcase = SHOWCASE.map((id) => all.find((g) => g.id === id)).filter(Boolean);
+    const rest = all.filter((g) => !SHOWCASE.includes(g.id));
+    return [...showcase, ...rest];
+  }, []);
 
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.list}>
-        <Text style={styles.title}>DEV — Oyun testi</Text>
-        {games.map((g) => (
-          <Pressable
-            key={g.id}
-            onPress={() => router.push({ pathname: '/dev-play', params: { game: g.id } })}
-            style={styles.row}
-          >
-            <Text style={styles.rowLabel}>{g.id}</Text>
-            <Text style={styles.rowMeta}>
-              {g.category} · ~{Math.round(g.estimatedDurationMs / 1000)}s
-            </Text>
-          </Pressable>
-        ))}
+        <Text style={styles.title}>GAME LAB</Text>
+        <Text style={styles.sub}>DEV only · showcase önce</Text>
+        {games.map((g) =>
+          g ? (
+            <Pressable
+              key={g.id}
+              onPress={() => router.push({ pathname: '/dev-play', params: { game: g.id } })}
+              style={styles.row}
+            >
+              <Text style={styles.rowLabel}>{g.title}</Text>
+              <Text style={styles.rowMeta}>
+                {g.id} · {g.category} · {g.interactionType}
+                {!g.enabledInMainMix ? ' · mix OFF' : ''}
+              </Text>
+            </Pressable>
+          ) : null,
+        )}
+        <View style={{ height: spacing.xl }} />
       </ScrollView>
     </Screen>
   );
@@ -38,15 +61,16 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.heading,
+  },
+  sub: {
+    ...typography.bodySmall,
     marginBottom: spacing.md,
   },
   row: {
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+    gap: 4,
   },
   rowLabel: {
     ...typography.body,

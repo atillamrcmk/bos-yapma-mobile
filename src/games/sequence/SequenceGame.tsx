@@ -1,15 +1,14 @@
 import { useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { OptionButton } from '@/components/ui/OptionButton';
 import type { GameComponentProps } from '@/types/game';
-import { gameAccents, spacing, typography } from '@/theme';
+import { colors, gameAccents, spacing, touchTargetMin, typography } from '@/theme';
 import { haptics } from '@/utils/haptics';
 import { nowMs } from '@/utils/time';
 import { createSeededRandom, shuffleWithSeed } from '@/utils/seeded-random';
 
 interface SequenceProblem {
-  display: string;
+  seq: number[];
   answer: number;
   options: number[];
 }
@@ -54,7 +53,6 @@ function generateSequence(seed: number, difficulty: number): SequenceProblem {
   const pick =
     patterns[Math.floor(random() * (difficulty >= 2 ? patterns.length : patterns.length - 1))]!;
   const { seq, next } = pick();
-  const display = `${seq.join(' — ')} — ?`;
 
   const options = new Set<number>([next]);
   while (options.size < 4) {
@@ -63,7 +61,7 @@ function generateSequence(seed: number, difficulty: number): SequenceProblem {
   }
 
   return {
-    display,
+    seq,
     answer: next,
     options: shuffleWithSeed([...options], seed + 3),
   };
@@ -72,15 +70,21 @@ function generateSequence(seed: number, difficulty: number): SequenceProblem {
 export function SequenceGame({ onComplete, seed, difficulty }: GameComponentProps) {
   const problem = useMemo(() => generateSequence(seed, difficulty), [seed, difficulty]);
   const startAtRef = useRef(nowMs());
-  const [answered, setAnswered] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [revealed, setRevealed] = useState<number | null>(null);
   const accent = gameAccents.sequence;
 
   const handleSelect = (value: number) => {
-    if (answered) return;
-    setAnswered(true);
+    if (selected != null) return;
+    setSelected(value);
     const correct = value === problem.answer;
+    setRevealed(value);
     if (correct) haptics.success();
     else haptics.warning();
+
+    if (!correct) {
+      setTimeout(() => setRevealed(problem.answer), 280);
+    }
 
     setTimeout(
       () => {
@@ -94,24 +98,46 @@ export function SequenceGame({ onComplete, seed, difficulty }: GameComponentProp
           completedAt: nowMs(),
         });
       },
-      correct ? 500 : 900,
+      correct ? 450 : 700,
     );
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Sıradaki sayı?</Text>
-      <Text style={[styles.sequence, { color: accent }]}>{problem.display}</Text>
-      <View style={styles.options}>
-        {problem.options.map((opt) => (
-          <OptionButton
-            key={opt}
-            correct={answered && opt === problem.answer}
-            disabled={answered}
-            label={String(opt)}
-            onPress={() => handleSelect(opt)}
-          />
+      <View style={styles.rhythm} accessibilityLabel={problem.seq.join(', ')}>
+        {problem.seq.map((n, i) => (
+          <Text key={`${n}-${i}`} style={[styles.beat, { color: accent }]}>
+            {n}
+          </Text>
         ))}
+        <Text style={[styles.beat, styles.unknown, revealed != null && { color: accent }]}>
+          {revealed ?? '?'}
+        </Text>
+      </View>
+
+      <View style={styles.options}>
+        {problem.options.map((opt) => {
+          const isSelected = selected === opt;
+          const isAnswer = selected != null && opt === problem.answer;
+          return (
+            <Pressable
+              key={opt}
+              accessibilityLabel={String(opt)}
+              accessibilityRole="button"
+              disabled={selected != null}
+              onPress={() => handleSelect(opt)}
+              style={({ pressed }) => [
+                styles.option,
+                isAnswer && styles.optionCorrect,
+                isSelected && !isAnswer && styles.optionWrong,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.optionLabel}>{opt}</Text>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -122,22 +148,58 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
-    gap: spacing.xl,
   },
   title: {
-    ...typography.heading,
-    textAlign: 'center',
+    ...typography.bodySmall,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
   },
-  sequence: {
-    ...typography.metricSmall,
+  rhythm: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginTop: spacing.xxl,
+    paddingHorizontal: spacing.xs,
+  },
+  beat: {
     fontSize: 28,
-    textAlign: 'center',
-    marginTop: spacing.lg,
-    lineHeight: 36,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.4,
+  },
+  unknown: {
+    color: colors.textMuted,
   },
   options: {
     marginTop: 'auto',
     marginBottom: spacing.lg,
-    gap: spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  option: {
+    width: '48%',
+    flexGrow: 1,
+    minHeight: touchTargetMin + 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: 8,
+  },
+  optionCorrect: {
+    borderColor: colors.success,
+  },
+  optionWrong: {
+    borderColor: colors.error,
+  },
+  optionLabel: {
+    ...typography.heading,
+    fontVariant: ['tabular-nums'],
+  },
+  pressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
   },
 });

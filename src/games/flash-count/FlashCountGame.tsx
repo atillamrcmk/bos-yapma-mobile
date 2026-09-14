@@ -138,6 +138,7 @@ export function FlashCountGame({ onComplete, seed }: GameComponentProps) {
               disabled={answered}
               label={String(opt)}
               onPress={() => handleSelect(opt)}
+              style={styles.option}
             />
           ))}
         </View>
@@ -178,7 +179,13 @@ const styles = StyleSheet.create({
     marginTop: '40%',
   },
   options: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginBottom: spacing.lg,
+  },
+  option: {
+    width: '48%',
+    flexGrow: 1,
   },
 });

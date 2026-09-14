@@ -36,10 +36,10 @@ export function Button({
       disabled={disabled}
       onPress={onPress}
       onPressIn={() => {
-        scale.value = withTiming(0.97, { duration: 100 });
+        scale.value = withTiming(0.98, { duration: 90 });
       }}
       onPressOut={() => {
-        scale.value = withTiming(1, { duration: 150 });
+        scale.value = withTiming(1, { duration: 110 });
       }}
       style={[
         styles.base,

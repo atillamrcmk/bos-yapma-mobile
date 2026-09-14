@@ -10,10 +10,28 @@ export type GameId =
   | 'target-tap'
   | 'flash-count'
   | 'timing'
-  | 'order-three';
+  | 'order-three'
+  | 'hold-it'
+  | 'untangle'
+  | 'stop-the-line'
+  | 'fit-it'
+  | 'spot-change'
+  | 'perfect-circle';
 
-export type GameCategory =
-  'reflex' | 'memory' | 'knowledge' | 'logic' | 'math' | 'visual' | 'timing';
+/** Session taxonomy for interactive micro-games. */
+export type GameCategory = 'ACTION' | 'PUZZLE' | 'PERCEPTION' | 'MEMORY' | 'TIMING' | 'OTHER';
+
+export type InteractionType =
+  | 'tap'
+  | 'drag'
+  | 'draw'
+  | 'hold'
+  | 'timing'
+  | 'observe'
+  | 'spatial'
+  | 'rotate'
+  | 'memory'
+  | 'choice';
 
 export interface GameResult {
   gameId: GameId;

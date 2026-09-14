@@ -1,10 +1,10 @@
 import { StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 
 import { colors } from '@/theme';
 
 interface ProgressBarProps {
-  progress: number;
+  progress: SharedValue<number>;
   color?: string;
   height?: number;
 }
@@ -12,12 +12,10 @@ interface ProgressBarProps {
 export function ProgressBar({
   progress,
   color = colors.accentPrimary,
-  height = 3,
+  height = 2,
 }: ProgressBarProps) {
-  const clamped = Math.min(1, Math.max(0, progress));
-
   const fillStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleX: withTiming(clamped, { duration: 200 }) }],
+    transform: [{ scaleX: Math.min(1, Math.max(0, progress.value)) }],
   }));
 
   return (
@@ -35,7 +33,7 @@ export function ProgressBar({
 
 const styles = StyleSheet.create({
   track: {
-    width: '100%',
+    flex: 1,
     backgroundColor: colors.borderSubtle,
     overflow: 'hidden',
   },

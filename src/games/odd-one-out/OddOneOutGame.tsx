@@ -25,10 +25,6 @@ interface CellData {
   isOdd: boolean;
 }
 
-function randomGridSize(): number {
-  return GRID_MIN + Math.floor(Math.random() * (GRID_MAX - GRID_MIN + 1));
-}
-
 function generateGrid(seed: number, gridSize: number): CellData[] {
   const random = createSeededRandom(seed);
   const normalSymbol = SYMBOLS[Math.floor(random() * SYMBOLS.length)]!;
@@ -59,7 +55,10 @@ export function OddOneOutGame({ onComplete, seed }: GameComponentProps) {
   const [wrongId, setWrongId] = useState<number | null>(null);
   const [successId, setSuccessId] = useState<number | null>(null);
 
-  const gridSize = useMemo(() => randomGridSize(), []);
+  const gridSize = useMemo(() => {
+    const random = createSeededRandom(seed + 41);
+    return GRID_MIN + Math.floor(random() * (GRID_MAX - GRID_MIN + 1));
+  }, [seed]);
   const cells = useMemo(() => generateGrid(seed, gridSize), [gridSize, seed]);
 
   const windowWidth = Dimensions.get('window').width;
@@ -146,6 +145,7 @@ export function OddOneOutGame({ onComplete, seed }: GameComponentProps) {
             accent={accent}
             cell={cell}
             correct={successId === cell.id}
+            faded={Boolean(answered && successId != null && cell.id !== successId)}
             onPress={() => handleSelect(cell)}
             size={cellSize}
             wrong={wrongId === cell.id}
@@ -162,6 +162,7 @@ function Cell({
   onPress,
   correct,
   wrong,
+  faded,
   accent,
 }: {
   cell: CellData;
@@ -169,21 +170,29 @@ function Cell({
   onPress: () => void;
   correct: boolean;
   wrong: boolean;
+  faded: boolean;
   accent: string;
 }) {
   const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
     transform: [{ scale: scale.value }],
   }));
 
   useEffect(() => {
     if (!correct) return;
     scale.value = withSequence(
-      withSpring(1.28, { damping: 8, stiffness: 280 }),
-      withSpring(1.1, { damping: 12, stiffness: 200 }),
+      withSpring(1.16, { damping: 12, stiffness: 280 }),
+      withSpring(1.06, { damping: 14, stiffness: 220 }),
     );
   }, [correct, scale]);
+
+  useEffect(() => {
+    if (!faded) return;
+    opacity.value = withTiming(0.32, { duration: 180 });
+  }, [faded, opacity]);
 
   const onCellPress = () => {
     playUiClick();
@@ -206,6 +215,7 @@ function Cell({
             width: size,
             height: size,
             borderRadius: Math.max(6, Math.round(size * 0.18)),
+            borderWidth: correct ? 2 : 1.5,
             borderColor: wrong ? colors.error : correct ? accent : colors.borderSubtle,
             backgroundColor: correct ? `${accent}22` : colors.surface,
           },

@@ -7,6 +7,16 @@ export type KnowledgeCategory =
   | 'turkey'
   | 'geography';
 
+export const KNOWLEDGE_CATEGORY_LABEL: Record<KnowledgeCategory, string> = {
+  technology: 'Teknoloji',
+  history: 'Tarih',
+  science: 'Bilim',
+  culture: 'Kültür',
+  sports: 'Spor',
+  turkey: 'Türkiye',
+  geography: 'Coğrafya',
+};
+
 export type KnowledgeMetric =
   | 'year'
   | 'population'

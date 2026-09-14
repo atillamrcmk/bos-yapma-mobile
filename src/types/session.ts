@@ -29,6 +29,10 @@ export interface SessionSummary {
   challengeCount: number;
   completedAt: string;
   highlightReactionMs: number | null;
+  highlightTimingAbsSec: number | null;
+  highlightCircleScore: number | null;
+  highlightStopLineAccuracy: number | null;
+  puzzleSolvedCount: number;
   estimateAccuracy: number | null;
   memoryScore: string | null;
   newFactsCount: number;

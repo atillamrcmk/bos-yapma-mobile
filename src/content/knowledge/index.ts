@@ -1,5 +1,5 @@
 export type { KnowledgeCategory, KnowledgeDifficulty, KnowledgeItem, KnowledgeMetric, OrderPrompt } from '@/content/knowledge/types';
-export { promptForMetric } from '@/content/knowledge/types';
+export { KNOWLEDGE_CATEGORY_LABEL, promptForMetric } from '@/content/knowledge/types';
 export { knowledgeItems, knowledgeItemById } from '@/content/knowledge/items';
 export {
   buildWhichCameFirstChallenge,

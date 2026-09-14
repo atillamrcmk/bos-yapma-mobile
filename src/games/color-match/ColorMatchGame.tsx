@@ -1,15 +1,21 @@
-import { useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { stroopColorKeys, stroopColors, type StroopColorKey } from '@/content/color-match';
-import { OptionButton } from '@/components/ui/OptionButton';
 import type { GameComponentProps } from '@/types/game';
-import { gameAccents, spacing, typography } from '@/theme';
+import { colors, spacing, touchTargetMin, typography } from '@/theme';
 import { haptics } from '@/utils/haptics';
 import { nowMs } from '@/utils/time';
-import { createSeededRandom, shuffleWithSeed } from '@/utils/seeded-random';
+import { createSeededRandom } from '@/utils/seeded-random';
 
 const ROUNDS = 3;
+const TILE_ORDER: StroopColorKey[] = ['red', 'blue', 'green', 'yellow'];
 
 interface Round {
   wordKey: StroopColorKey;
@@ -35,22 +41,42 @@ export function ColorMatchGame({ onComplete, seed }: GameComponentProps) {
   const startAtRef = useRef(nowMs());
   const [roundIndex, setRoundIndex] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
-  const [answered, setAnswered] = useState(false);
-  const accent = gameAccents['color-match'];
+  const [answered, setAnswered] = useState<StroopColorKey | null>(null);
+  const wordScale = useSharedValue(1);
+  const wordShake = useSharedValue(0);
 
   const round = rounds[roundIndex]!;
-  const options = useMemo(
-    () => shuffleWithSeed([...stroopColorKeys], seed + roundIndex + 11),
-    [roundIndex, seed],
-  );
+
+  useEffect(() => {
+    wordScale.value = 0.96;
+    wordScale.value = withTiming(1, { duration: 120 });
+    wordShake.value = 0;
+  }, [roundIndex, wordScale, wordShake]);
+
+  const wordStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: wordScale.value }, { translateX: wordShake.value }],
+  }));
 
   const handleSelect = (key: StroopColorKey) => {
     if (answered) return;
-    setAnswered(true);
+    setAnswered(key);
     const correct = key === round.inkKey;
     const nextCorrect = correct ? correctCount + 1 : correctCount;
-    if (correct) haptics.success();
-    else haptics.warning();
+    if (correct) {
+      wordScale.value = withSequence(
+        withTiming(1.06, { duration: 90 }),
+        withTiming(1, { duration: 110 }),
+      );
+      haptics.success();
+    } else {
+      wordShake.value = withSequence(
+        withTiming(-8, { duration: 40 }),
+        withTiming(8, { duration: 40 }),
+        withTiming(-5, { duration: 40 }),
+        withTiming(0, { duration: 50 }),
+      );
+      haptics.warning();
+    }
 
     setTimeout(
       () => {
@@ -68,36 +94,96 @@ export function ColorMatchGame({ onComplete, seed }: GameComponentProps) {
         } else {
           setCorrectCount(nextCorrect);
           setRoundIndex((i) => i + 1);
-          setAnswered(false);
+          setAnswered(null);
         }
       },
-      correct ? 400 : 700,
+      correct ? 220 : 280,
     );
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.prompt}>Yazının RENGİ ne?</Text>
-      <Text style={styles.sub}>Kelimenin anlamına değil, rengine bak.</Text>
-      <Text style={[styles.word, { color: stroopColors[round.inkKey].hex }]}>
+      <Text style={styles.prompt}>YAZININ RENGİ?</Text>
+      <Animated.Text
+        style={[styles.word, { color: stroopColors[round.inkKey].hex }, wordStyle]}
+      >
         {stroopColors[round.wordKey].label}
-      </Text>
-      <Text style={styles.round}>
-        {roundIndex + 1} / {ROUNDS}
-      </Text>
-      <View style={styles.options}>
-        {options.map((key) => (
-          <OptionButton
-            key={key}
-            correct={answered && key === round.inkKey}
-            disabled={answered}
-            label={stroopColors[key].label}
+      </Animated.Text>
+
+      <View style={styles.grid}>
+        {TILE_ORDER.map((key) => (
+          <ColorTile
+            key={`${roundIndex}-${key}`}
+            colorKey={key}
+            disabled={answered != null}
             onPress={() => handleSelect(key)}
-            style={{ borderColor: answered && key === round.inkKey ? accent : undefined }}
+            state={
+              answered == null
+                ? 'idle'
+                : key === round.inkKey
+                  ? 'correct'
+                  : answered === key
+                    ? 'wrong'
+                    : 'idle'
+            }
           />
         ))}
       </View>
     </View>
+  );
+}
+
+function ColorTile({
+  colorKey,
+  onPress,
+  disabled,
+  state,
+}: {
+  colorKey: StroopColorKey;
+  onPress: () => void;
+  disabled: boolean;
+  state: 'idle' | 'correct' | 'wrong';
+}) {
+  const scale = useSharedValue(1);
+  const color = stroopColors[colorKey];
+
+  useEffect(() => {
+    if (state === 'correct') {
+      scale.value = withSequence(
+        withTiming(1.04, { duration: 90 }),
+        withTiming(1, { duration: 110 }),
+      );
+    }
+  }, [scale, state]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={[styles.tileWrap, animatedStyle]}>
+      <Pressable
+        accessibilityLabel={color.label}
+        accessibilityRole="button"
+        disabled={disabled}
+        onPress={onPress}
+        onPressIn={() => {
+          scale.value = withTiming(0.98, { duration: 80 });
+        }}
+        onPressOut={() => {
+          if (state === 'idle') scale.value = withTiming(1, { duration: 100 });
+        }}
+        style={[
+          styles.tile,
+          {
+            borderColor: state === 'wrong' ? colors.error : color.hex,
+            backgroundColor: `${color.hex}22`,
+          },
+        ]}
+      >
+        <Text style={[styles.tileLabel, { color: color.hex }]}>{color.label}</Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -106,31 +192,43 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
-    gap: spacing.md,
   },
   prompt: {
-    ...typography.heading,
-    textAlign: 'center',
-  },
-  sub: {
-    ...typography.bodySmall,
+    ...typography.label,
+    fontSize: 12,
+    letterSpacing: 1.8,
     textAlign: 'center',
   },
   word: {
-    fontSize: 40,
+    fontSize: 56,
     fontWeight: '800',
     textAlign: 'center',
-    marginVertical: spacing.xl,
-    letterSpacing: 2,
+    marginTop: spacing.xl,
+    marginBottom: spacing.xxl,
+    letterSpacing: 1,
   },
-  round: {
-    ...typography.label,
-    textAlign: 'center',
-    fontSize: 11,
-  },
-  options: {
+  grid: {
     marginTop: 'auto',
     marginBottom: spacing.lg,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  tileWrap: {
+    width: '48%',
+    flexGrow: 1,
+  },
+  tile: {
+    minHeight: Math.max(72, touchTargetMin),
+    borderWidth: 1.5,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+  },
+  tileLabel: {
+    ...typography.button,
+    fontSize: 14,
+    letterSpacing: 1,
   },
 });

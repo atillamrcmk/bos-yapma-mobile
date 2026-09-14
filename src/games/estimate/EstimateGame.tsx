@@ -12,20 +12,17 @@ import { pickFromSeed } from '@/utils/seeded-random';
 type Phase = 'input' | 'result';
 
 const THUMB_SIZE = 28;
+const SUCCESS_PROXIMITY = 85;
 
-/** Nearness vs true answer: 100 = exact, 85 = ±15% tolerance edge. */
 function proximityScore(user: number, target: number): number {
   const denom = Math.abs(target) || 1;
   const relativeError = Math.abs(user - target) / denom;
   return Math.round(Math.max(0, (1 - relativeError) * 100));
 }
 
-const SUCCESS_PROXIMITY = 85;
-
 export function EstimateGame({ onComplete, seed }: GameComponentProps) {
   const question = useMemo(() => pickFromSeed(estimateQuestions, seed), [seed]);
   const startAtRef = useRef(nowMs());
-  const trackWidthRef = useRef(0);
   const completingRef = useRef(false);
 
   const range = question.max - question.min;
@@ -34,52 +31,62 @@ export function EstimateGame({ onComplete, seed }: GameComponentProps) {
   const [phase, setPhase] = useState<Phase>('input');
   const [userValue, setUserValue] = useState(initialValue);
   const [thumbX, setThumbX] = useState(0);
-  const [feedback, setFeedback] = useState('');
-
+  const [trackWidth, setTrackWidth] = useState(0);
+  const [thumbPressed, setThumbPressed] = useState(false);
   const accent = gameAccents.estimate;
 
   const valueFromX = useCallback(
     (x: number) => {
-      const width = trackWidthRef.current;
-      if (width <= 0) return initialValue;
-      const clamped = Math.max(0, Math.min(width, x));
-      const ratio = clamped / width;
+      if (trackWidth <= 0) return initialValue;
+      const clamped = Math.max(0, Math.min(trackWidth, x));
+      const ratio = clamped / trackWidth;
       return Math.round(question.min + ratio * range);
     },
-    [initialValue, question.min, range],
+    [initialValue, question.min, range, trackWidth],
   );
 
   const applyX = useCallback(
     (x: number) => {
-      const width = trackWidthRef.current;
-      const clamped = Math.max(0, Math.min(width, x));
+      if (trackWidth <= 0) return;
+      const clamped = Math.max(0, Math.min(trackWidth, x));
       setThumbX(clamped);
       setUserValue(valueFromX(clamped));
     },
-    [valueFromX],
+    [trackWidth, valueFromX],
   );
 
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponder: () => phase === 'input',
+        onMoveShouldSetPanResponder: () => phase === 'input',
         onPanResponderGrant: (evt) => {
+          if (phase !== 'input') return;
           haptics.selection();
+          setThumbPressed(true);
           applyX(evt.nativeEvent.locationX);
         },
         onPanResponderMove: (evt) => {
+          if (phase !== 'input') return;
           applyX(evt.nativeEvent.locationX);
         },
+        onPanResponderRelease: () => {
+          setThumbPressed(false);
+        },
+        onPanResponderTerminate: () => {
+          setThumbPressed(false);
+        },
       }),
-    [applyX],
+    [applyX, phase],
   );
 
   const onTrackLayout = (event: LayoutChangeEvent) => {
     const width = event.nativeEvent.layout.width;
-    trackWidthRef.current = width;
-    const ratio = (initialValue - question.min) / (range || 1);
-    setThumbX(ratio * width);
+    setTrackWidth(width);
+    if (phase === 'input' && thumbX === 0) {
+      const ratio = (initialValue - question.min) / (range || 1);
+      setThumbX(ratio * width);
+    }
   };
 
   const handleSubmit = () => {
@@ -88,18 +95,7 @@ export function EstimateGame({ onComplete, seed }: GameComponentProps) {
 
     const accuracy = proximityScore(userValue, question.target);
     const isSuccess = accuracy >= SUCCESS_PROXIMITY;
-    const relativeError =
-      Math.abs(userValue - question.target) / (Math.abs(question.target) || 1);
-    const message =
-      relativeError <= 0.05
-        ? 'Neredeyse tam isabet.'
-        : relativeError <= 0.15
-          ? 'Oldukça yakındın.'
-          : relativeError <= 0.3
-            ? 'Fena değil.'
-            : 'Bir dahaki sefere.';
 
-    setFeedback(message);
     setPhase('result');
     if (isSuccess) haptics.success();
     else haptics.warning();
@@ -120,61 +116,71 @@ export function EstimateGame({ onComplete, seed }: GameComponentProps) {
           fact: question.fact,
         },
       });
-    }, 1800);
+    }, 900);
   };
 
   const fillWidth = Math.max(0, thumbX);
+  const targetX =
+    trackWidth > 0 ? ((question.target - question.min) / (range || 1)) * trackWidth : 0;
+  const delta = Math.abs(userValue - question.target);
+  const unit = question.unit ? ` ${question.unit}` : '';
 
   return (
     <View style={styles.container}>
       <Text style={styles.question}>{question.question}</Text>
 
-      {phase === 'input' ? (
-        <>
-          <Text style={[styles.liveValue, { color: accent }]}>
-            {userValue}
-            {question.unit ? ` ${question.unit}` : ''}
-          </Text>
+      <Text style={[styles.liveValue, { color: accent }]}>
+        {userValue}
+        {unit}
+      </Text>
 
-          <View style={styles.sliderSection}>
-            <View style={styles.rangeLabels}>
-              <Text style={styles.rangeLabel}>{question.min}</Text>
-              <Text style={styles.rangeLabel}>{question.max}</Text>
-            </View>
-            <View
-              {...panResponder.panHandlers}
-              onLayout={onTrackLayout}
-              style={styles.trackContainer}
-            >
-              <View style={styles.track}>
-                <View style={[styles.fill, { backgroundColor: accent, width: fillWidth }]} />
-              </View>
-              <View
-                style={[
-                  styles.thumb,
-                  {
-                    borderColor: accent,
-                    transform: [{ translateX: thumbX - THUMB_SIZE / 2 }],
-                  },
-                ]}
-              />
-            </View>
+      <View style={styles.sliderSection}>
+        <View style={styles.rangeLabels}>
+          <Text style={styles.rangeLabel}>{question.min}</Text>
+          <Text style={styles.rangeLabel}>{question.max}</Text>
+        </View>
+        <View
+          {...(phase === 'input' ? panResponder.panHandlers : {})}
+          onLayout={onTrackLayout}
+          style={styles.trackContainer}
+        >
+          <View style={styles.track}>
+            <View style={[styles.fill, { backgroundColor: accent, width: fillWidth }]} />
           </View>
+          <View
+            style={[
+              styles.thumb,
+              {
+                borderColor: accent,
+                transform: [
+                  { translateX: thumbX - THUMB_SIZE / 2 },
+                  { scale: thumbPressed ? 1.12 : 1 },
+                ],
+              },
+            ]}
+          />
+          {phase === 'result' ? (
+            <View
+              style={[
+                styles.targetMarker,
+                {
+                  backgroundColor: colors.textPrimary,
+                  transform: [{ translateX: targetX - 1 }],
+                },
+              ]}
+            />
+          ) : null}
+        </View>
+      </View>
 
-          <Button label="Tahmin Et" onPress={handleSubmit} style={styles.submit} />
-        </>
+      {phase === 'input' ? (
+        <Button label="Tahmin Et" onPress={handleSubmit} style={styles.submit} />
       ) : (
         <View style={styles.resultBlock}>
-          <Text style={[styles.resultValue, { color: accent }]}>
-            {userValue}
-            {question.unit ? ` ${question.unit}` : ''}
+          <Text style={styles.delta}>{delta} fark.</Text>
+          <Text style={styles.fact} numberOfLines={2}>
+            {question.fact}
           </Text>
-          <Text style={styles.feedback}>{feedback}</Text>
-          <Text style={styles.targetLabel}>
-            Gerçek cevap: {question.target}
-            {question.unit ? ` ${question.unit}` : ''}
-          </Text>
-          <Text style={styles.fact}>{question.fact}</Text>
         </View>
       )}
     </View>
@@ -210,7 +216,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   trackContainer: {
-    height: 44,
+    height: 48,
     justifyContent: 'center',
   },
   track: {
@@ -225,34 +231,34 @@ const styles = StyleSheet.create({
   },
   thumb: {
     position: 'absolute',
-    top: 8,
+    top: 10,
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
     backgroundColor: colors.surfaceElevated,
     borderWidth: 2,
   },
+  targetMarker: {
+    position: 'absolute',
+    top: 8,
+    width: 2,
+    height: 32,
+    borderRadius: 1,
+  },
   submit: {
     marginTop: 'auto',
     marginBottom: spacing.lg,
   },
   resultBlock: {
-    gap: spacing.md,
-    marginTop: spacing.lg,
+    marginTop: 'auto',
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
   },
-  resultValue: {
-    ...typography.metric,
-  },
-  feedback: {
+  delta: {
     ...typography.heading,
-    fontSize: 20,
-  },
-  targetLabel: {
-    ...typography.body,
-    color: colors.textMuted,
+    fontSize: 22,
   },
   fact: {
     ...typography.bodySmall,
-    marginTop: spacing.sm,
   },
 });
