@@ -1,17 +1,17 @@
 import { useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { OptionButton } from '@/components/ui/OptionButton';
 import type { GameComponentProps } from '@/types/game';
-import { gameAccents, spacing, typography } from '@/theme';
+import { colors, gameAccents, spacing, touchTargetMin, typography } from '@/theme';
 import { haptics } from '@/utils/haptics';
 import { nowMs } from '@/utils/time';
-import { createSeededRandom, shuffleWithSeed } from '@/utils/seeded-random';
+import { createSeededRandom } from '@/utils/seeded-random';
 
 interface MathProblem {
   expression: string;
   answer: number;
-  options: number[];
+  wrong: number;
+  leftCorrect: boolean;
 }
 
 function generateProblem(seed: number, difficulty: number): MathProblem {
@@ -25,35 +25,26 @@ function generateProblem(seed: number, difficulty: number): MathProblem {
 
   const answer = useSubtraction ? a - b : a + b;
   const expression = useSubtraction ? `${a} − ${b}` : `${a} + ${b}`;
+  let wrong = answer + (random() > 0.5 ? 6 : -6);
+  if (wrong === answer || wrong < 0) wrong = answer + 8;
+  const leftCorrect = random() > 0.5;
 
-  const options = new Set<number>([answer]);
-  while (options.size < 4) {
-    const offset = Math.floor(random() * 10) - 5 || 2;
-    const candidate = answer + offset;
-    if (candidate >= 0) options.add(candidate);
-  }
-
-  return {
-    expression,
-    answer,
-    options: shuffleWithSeed([...options], seed + 7),
-  };
+  return { expression, answer, wrong, leftCorrect };
 }
 
 export function QuickMathGame({ onComplete, seed, difficulty }: GameComponentProps) {
   const problem = useMemo(() => generateProblem(seed, difficulty), [seed, difficulty]);
   const startAtRef = useRef(nowMs());
-  const [answered, setAnswered] = useState(false);
-  const [selected, setSelected] = useState<number | null>(null);
-
+  const [answered, setAnswered] = useState<'left' | 'right' | null>(null);
   const accent = gameAccents['quick-math'];
 
-  const handleSelect = (value: number) => {
-    if (answered) return;
-    setSelected(value);
-    setAnswered(true);
+  const leftValue = problem.leftCorrect ? problem.answer : problem.wrong;
+  const rightValue = problem.leftCorrect ? problem.wrong : problem.answer;
 
-    const correct = value === problem.answer;
+  const handleSelect = (side: 'left' | 'right') => {
+    if (answered) return;
+    setAnswered(side);
+    const correct = (side === 'left') === problem.leftCorrect;
     if (correct) haptics.success();
     else haptics.warning();
 
@@ -67,33 +58,86 @@ export function QuickMathGame({ onComplete, seed, difficulty }: GameComponentPro
           durationMs: nowMs() - startAtRef.current,
           startedAt: startAtRef.current,
           completedAt: nowMs(),
-          metadata: { answer: problem.answer, selected: value },
+          metadata: { answer: problem.answer, selected: side },
         });
       },
-      correct ? 500 : 900,
+      correct ? 400 : 550,
     );
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Hızlı hesap</Text>
-      <Text style={[styles.expression, { color: accent }]}>{problem.expression}</Text>
-
-      <View style={styles.options}>
-        {problem.options.map((option) => (
-          <OptionButton
-            key={option}
-            correct={answered && option === problem.answer}
-            disabled={answered}
-            label={String(option)}
-            onPress={() => handleSelect(option)}
-            selected={selected === option}
-            wrong={answered && selected === option && option !== problem.answer}
-            style={styles.option}
-          />
-        ))}
+      <Text style={styles.title}>Hangisi doğru?</Text>
+      <View style={styles.cards}>
+        <EquationCard
+          accent={accent}
+          disabled={answered != null}
+          expression={problem.expression}
+          result={leftValue}
+          state={
+            answered == null
+              ? 'idle'
+              : problem.leftCorrect
+                ? 'correct'
+                : answered === 'left'
+                  ? 'wrong'
+                  : 'idle'
+          }
+          onPress={() => handleSelect('left')}
+        />
+        <EquationCard
+          accent={accent}
+          disabled={answered != null}
+          expression={problem.expression}
+          result={rightValue}
+          state={
+            answered == null
+              ? 'idle'
+              : !problem.leftCorrect
+                ? 'correct'
+                : answered === 'right'
+                  ? 'wrong'
+                  : 'idle'
+          }
+          onPress={() => handleSelect('right')}
+        />
       </View>
     </View>
+  );
+}
+
+function EquationCard({
+  expression,
+  result,
+  onPress,
+  state,
+  accent,
+  disabled,
+}: {
+  expression: string;
+  result: number;
+  onPress: () => void;
+  state: 'idle' | 'correct' | 'wrong';
+  accent: string;
+  disabled: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={`${expression} eşittir ${result}`}
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.card,
+        state === 'correct' && { borderColor: accent },
+        state === 'wrong' && styles.cardWrong,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Text style={styles.equation}>
+        {expression} = {result}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -102,23 +146,38 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
-    gap: spacing.xl,
   },
   title: {
-    ...typography.heading,
-    textAlign: 'center',
+    ...typography.bodySmall,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
   },
-  expression: {
-    ...typography.metric,
-    textAlign: 'center',
-    marginTop: spacing.lg,
-  },
-  options: {
-    marginTop: 'auto',
-    marginBottom: spacing.lg,
+  cards: {
+    flex: 1,
+    justifyContent: 'center',
     gap: spacing.md,
   },
-  option: {
-    width: '100%',
+  card: {
+    minHeight: Math.max(88, touchTargetMin * 2),
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: 8,
+  },
+  cardWrong: {
+    borderColor: colors.error,
+  },
+  equation: {
+    ...typography.heading,
+    fontSize: 26,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
+  pressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.98 }],
   },
 });

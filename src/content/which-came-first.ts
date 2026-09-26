@@ -1,3 +1,8 @@
+/**
+ * Legacy Which Came First pair list.
+ * Runtime challenges now come from `src/content/knowledge`.
+ * This file is retained so historical curated pairs are not deleted.
+ */
 export interface WhichCameFirstPair {
   id: string;
   optionA: string;
@@ -7,6 +12,7 @@ export interface WhichCameFirstPair {
   yearB: number;
 }
 
+/** @deprecated Prefer `buildWhichCameFirstChallenge` from `@/content/knowledge`. */
 export const whichCameFirstPairs: WhichCameFirstPair[] = [
   {
     id: 'youtube-twitter',

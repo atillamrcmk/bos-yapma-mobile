@@ -1,4 +1,4 @@
-import { getEnabledMetadata } from '../games/metadata';
+import { getMainMixMetadata } from '../games/metadata';
 import { getDifficultyForDuration, selectNextChallenge } from './generator';
 import type { GameCategory, GameId } from '../types/game';
 import { SESSION_DURATION_MS, type SessionDuration } from '../types/session';
@@ -14,7 +14,7 @@ function simulateSession(
 } {
   const targetMs = SESSION_DURATION_MS[durationMinutes];
   const difficulty = getDifficultyForDuration(durationMinutes);
-  const defs = getEnabledMetadata();
+  const defs = getMainMixMetadata();
   const durationById = Object.fromEntries(defs.map((d) => [d.id, d.estimatedDurationMs])) as Record<
     GameId,
     number
@@ -40,7 +40,7 @@ function simulateSession(
     challengeCount += 1;
 
     const jitter = 0.85 + (Math.sin(seed) * 0.5 + 0.5) * 0.3;
-    const gameDuration = Math.round(durationById[challenge.gameId] * jitter);
+    const gameDuration = Math.round((durationById[challenge.gameId] ?? 15_000) * jitter);
     elapsed += gameDuration;
 
     playedGameIds.push(challenge.gameId);

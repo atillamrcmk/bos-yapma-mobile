@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { colors, radius, touchTargetMin } from '@/theme';
+import { colors, touchTargetMin } from '@/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -25,10 +25,10 @@ export function IconButton({ icon, onPress, accessibilityLabel }: IconButtonProp
       hitSlop={8}
       onPress={onPress}
       onPressIn={() => {
-        scale.value = withTiming(0.92, { duration: 100 });
+        scale.value = withTiming(0.98, { duration: 80 });
       }}
       onPressOut={() => {
-        scale.value = withTiming(1, { duration: 150 });
+        scale.value = withTiming(1, { duration: 100 });
       }}
       style={[styles.button, animatedStyle]}
     >
@@ -41,14 +41,13 @@ const styles = StyleSheet.create({
   button: {
     width: touchTargetMin,
     height: touchTargetMin,
-    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent',
   },
   icon: {
-    fontSize: 18,
-    color: colors.textPrimary,
-    fontWeight: '500',
+    fontSize: 16,
+    color: colors.textMuted,
+    fontWeight: '400',
   },
 });

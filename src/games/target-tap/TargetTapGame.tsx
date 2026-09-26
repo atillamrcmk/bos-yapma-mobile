@@ -3,8 +3,6 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-na
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -70,20 +68,29 @@ export function TargetTapGame({ onComplete, seed, difficulty }: GameComponentPro
   const baseSize = targetSizeForDifficulty(difficulty);
   const combo = comboApi?.currentCombo ?? 0;
   const targetSize = sizeWithCombo(baseSize, combo);
-  const targetSizeRef = useRef(targetSize);
-  targetSizeRef.current = targetSize;
+  const hitSize = Math.max(touchTargetMin, targetSize);
+  const visualSize = Math.max(22, Math.round(targetSize * 0.72));
+  const targetSizeRef = useRef(hitSize);
   const targetTimeoutMs = timeoutMsForDifficulty(difficulty);
+
+  useEffect(() => {
+    targetSizeRef.current = hitSize;
+  }, [hitSize]);
 
   const [tapIndex, setTapIndex] = useState(0);
   const [position, setPosition] = useState(() =>
-    randomPosition(random, playAreaWidth, playAreaHeight, targetSize),
+    randomPosition(random, playAreaWidth, playAreaHeight, hitSize),
   );
   const [finished, setFinished] = useState(false);
   const [stats, setStats] = useState({ avg: 0, best: 0 });
   const [spawnToken, setSpawnToken] = useState(0);
 
-  const scale = useSharedValue(1);
+  const scale = useSharedValue(0.85);
   const accent = gameAccents['target-tap'];
+
+  useEffect(() => {
+    scale.value = withTiming(1, { duration: 120 });
+  }, [scale, spawnToken]);
 
   const animatedTargetStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -98,9 +105,8 @@ export function TargetTapGame({ onComplete, seed, difficulty }: GameComponentPro
       );
       setTapIndex(nextIndex);
       setSpawnToken((t) => t + 1);
-      scale.value = 1;
     },
-    [playAreaHeight, playAreaWidth, random, scale],
+    [playAreaHeight, playAreaWidth, random],
   );
 
   const finishGame = useCallback(
@@ -126,7 +132,7 @@ export function TargetTapGame({ onComplete, seed, difficulty }: GameComponentPro
             misses: missCountRef.current,
           },
         });
-      }, 900);
+      }, 650);
     },
     [onComplete],
   );
@@ -152,13 +158,10 @@ export function TargetTapGame({ onComplete, seed, difficulty }: GameComponentPro
     tapTimesRef.current.push(delta);
     lastTapRef.current = now;
 
-    haptics.light();
+    haptics.selection();
     playUiClick();
 
-    scale.value = withSequence(
-      withTiming(0.78, { duration: 70 }),
-      withSpring(1, { damping: 14, stiffness: 280 }),
-    );
+    scale.value = withTiming(0.55, { duration: 80 });
 
     if (tapIndexRef.current + 1 >= TARGET_COUNT) {
       spawnIdRef.current += 1;
@@ -184,24 +187,30 @@ export function TargetTapGame({ onComplete, seed, difficulty }: GameComponentPro
               {
                 left: position.x,
                 top: position.y,
-                width: targetSize,
-                height: targetSize,
+                width: hitSize,
+                height: hitSize,
               },
               animatedTargetStyle,
             ]}
           >
             <Pressable
+              accessibilityLabel="Hedef"
+              accessibilityRole="button"
               onPress={handleTap}
-              style={[
-                styles.target,
-                {
-                  width: targetSize,
-                  height: targetSize,
-                  borderRadius: targetSize / 2,
-                  backgroundColor: accent,
-                },
-              ]}
-            />
+              style={styles.targetHit}
+            >
+              <View
+                style={[
+                  styles.target,
+                  {
+                    width: visualSize,
+                    height: visualSize,
+                    borderRadius: visualSize / 2,
+                    backgroundColor: accent,
+                  },
+                ]}
+              />
+            </Pressable>
           </Animated.View>
         ) : (
           <View style={styles.stats}>
@@ -241,6 +250,11 @@ const styles = StyleSheet.create({
   },
   targetWrap: {
     position: 'absolute',
+  },
+  targetHit: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   target: {
     alignItems: 'center',

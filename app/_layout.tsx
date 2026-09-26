@@ -24,8 +24,8 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.backgroundPrimary },
-          animation: 'fade',
-          animationDuration: 200,
+          animation: 'fade_from_bottom',
+          animationDuration: 280,
         }}
       />
       <StatusBar style="light" />

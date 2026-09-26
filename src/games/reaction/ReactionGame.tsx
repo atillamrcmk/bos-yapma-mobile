@@ -18,7 +18,7 @@ type Phase = 'waiting' | 'ready' | 'go' | 'result' | 'early';
 
 const MIN_DELAY = 800;
 const MAX_DELAY = 2500;
-const RESULT_DISPLAY_MS = 2000;
+const RESULT_DISPLAY_MS = 700;
 
 export function ReactionGame({ onComplete, seed }: GameComponentProps) {
   const [phase, setPhase] = useState<Phase>('waiting');
@@ -96,16 +96,16 @@ export function ReactionGame({ onComplete, seed }: GameComponentProps) {
     if (phase === 'waiting' || phase === 'ready') {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setPhase('early');
-      setFeedback('Erken bastın.');
+      setFeedback('Biraz erken.');
       haptics.warning();
-      setTimeout(() => startRound(), 900);
+      setTimeout(() => startRound(), 700);
       return;
     }
 
     if (phase === 'go') {
       const ms = Math.round(nowMs() - goAtRef.current);
       haptics.success();
-      const message = ms < 200 ? 'Çok hızlı.' : ms < 350 ? 'İyi refleks.' : 'Fena değil.';
+      const message = ms < 220 ? 'İyi.' : '';
       finish(ms, message, true);
     }
   };
@@ -133,13 +133,13 @@ export function ReactionGame({ onComplete, seed }: GameComponentProps) {
       <Animated.View entering={FadeIn.duration(200)} style={[styles.content, centerStyle]}>
         {phase === 'early' ? (
           <>
-            <Text style={styles.earlyTitle}>Erken bastın</Text>
+            <Text style={styles.earlyTitle}>Biraz erken.</Text>
             <Text style={styles.subtitle}>Yeşili bekle.</Text>
           </>
         ) : phase === 'result' ? (
           <>
             <Text style={[styles.resultValue, { color: accent }]}>{reactionMs} ms</Text>
-            <Text style={styles.resultFeedback}>{feedback}</Text>
+            {feedback ? <Text style={styles.resultFeedback}>{feedback}</Text> : null}
           </>
         ) : isGo ? (
           <Text style={[styles.goText, { color: accent }]}>ŞİMDİ</Text>
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundPrimary,
   },
   flash: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   content: {
     flex: 1,

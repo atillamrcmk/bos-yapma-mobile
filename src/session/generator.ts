@@ -1,4 +1,5 @@
-import { getEnabledMetadata, type GameMetadata } from '@/games/metadata';
+import type { InteractionType } from '@/games/metadata';
+import { getMainMixMetadata, type GameMetadata } from '@/games/metadata';
 import type { GameCategory, GameId } from '@/types/game';
 import type { SessionChallenge, SessionDuration } from '@/types/session';
 import { createSeededRandom } from '@/utils/seeded-random';
@@ -9,77 +10,99 @@ export interface GeneratorContext {
   durationMinutes: SessionDuration;
   playedGameIds: GameId[];
   playedCategories: GameCategory[];
+  playedInteractionTypes?: InteractionType[];
+  playedQuizPattern?: boolean[];
   difficulty: number;
   seed: number;
 }
 
 const SHORT_GAME_THRESHOLD_MS = 18_000;
 const VERY_SHORT_REMAINING_MS = 12_000;
-const LOW_REMAINING_MS = 20_000;
+const LOW_REMAINING_MS = 22_000;
 
-function isEligible(def: GameMetadata, ctx: GeneratorContext, strict: boolean): boolean {
-  const lastId = ctx.playedGameIds[ctx.playedGameIds.length - 1];
+function lastOf<T>(items: T[] | undefined): T | undefined {
+  if (!items || items.length === 0) return undefined;
+  return items[items.length - 1];
+}
+
+function isEligible(def: GameMetadata, ctx: GeneratorContext): boolean {
+  const lastId = lastOf(ctx.playedGameIds);
   if (lastId && def.id === lastId) return false;
 
-  const recentIds = ctx.playedGameIds.slice(-2);
-  if (recentIds.includes(def.id)) return false;
-
-  const recentCats = ctx.playedCategories.slice(-2);
-  if (
-    recentCats.length === 2 &&
-    recentCats[0] === recentCats[1] &&
-    recentCats[1] === def.category
-  ) {
-    return false;
-  }
+  const lastThree = ctx.playedGameIds.slice(-3);
+  if (lastThree.includes(def.id)) return false;
 
   const remaining = ctx.targetDurationMs - ctx.elapsedMs;
-  if (remaining < VERY_SHORT_REMAINING_MS && def.estimatedDurationMs > 12_000) return false;
+  if (remaining < VERY_SHORT_REMAINING_MS && def.estimatedDurationMs > 14_000) return false;
   if (remaining < LOW_REMAINING_MS && def.estimatedDurationMs > SHORT_GAME_THRESHOLD_MS) {
     return false;
-  }
-
-  if (strict && ctx.durationMinutes === 1) {
-    const seenCategories = new Set(ctx.playedCategories);
-    if (
-      ctx.playedGameIds.length < 3 &&
-      seenCategories.has(def.category) &&
-      ctx.playedGameIds.length > 0
-    ) {
-      const needNewCategory = seenCategories.size < Math.min(3, ctx.playedGameIds.length + 1);
-      if (needNewCategory && seenCategories.has(def.category) && !recentIds.includes(def.id)) {
-        const onlyThisCategoryRepeated =
-          ctx.playedCategories.filter((c) => c === def.category).length >= 2;
-        if (onlyThisCategoryRepeated) return false;
-      }
-    }
   }
 
   return true;
 }
 
-function pickWeighted(games: GameMetadata[], seed: number): GameMetadata {
+function candidateScore(def: GameMetadata, ctx: GeneratorContext): number {
+  let score = 100 * def.weight;
+
+  const lastId = lastOf(ctx.playedGameIds);
+  if (lastId === def.id) score -= 1000;
+
+  const lastType = lastOf(ctx.playedInteractionTypes);
+  if (lastType && lastType === def.interactionType) score -= 200;
+
+  const lastCat = lastOf(ctx.playedCategories);
+  if (lastCat && lastCat === def.category) score -= 80;
+
+  const lastThree = ctx.playedGameIds.slice(-3);
+  if (lastThree.includes(def.id)) score -= 100;
+
+  if (!ctx.playedGameIds.includes(def.id)) score += 30;
+
+  const remaining = ctx.targetDurationMs - ctx.elapsedMs;
+  if (remaining > 0 && remaining < def.estimatedDurationMs * 0.65) score -= 50;
+
+  // Soft category mix: prefer ACTION / PUZZLE / PERCEPTION variety early
+  const catCounts = ctx.playedCategories.reduce<Record<string, number>>((acc, c) => {
+    acc[c] = (acc[c] ?? 0) + 1;
+    return acc;
+  }, {});
+  const total = ctx.playedCategories.length || 1;
+  const share = (catCounts[def.category] ?? 0) / total;
+  if (def.category === 'ACTION' && share > 0.4) score -= 25;
+  if (def.category === 'PUZZLE' && share > 0.45) score -= 25;
+  if (def.category === 'OTHER') score -= 500;
+
+  return score;
+}
+
+function pickWeightedByScore(
+  games: GameMetadata[],
+  ctx: GeneratorContext,
+  seed: number,
+): GameMetadata {
   const random = createSeededRandom(seed);
-  const totalWeight = games.reduce((sum, g) => sum + g.weight, 0);
+  const scored = games.map((g) => ({ g, w: Math.max(1, candidateScore(g, ctx)) }));
+  const totalWeight = scored.reduce((sum, item) => sum + item.w, 0);
   let roll = random() * totalWeight;
-  for (const game of games) {
-    roll -= game.weight;
-    if (roll <= 0) return game;
+  for (const item of scored) {
+    roll -= item.w;
+    if (roll <= 0) return item.g;
   }
-  return games[games.length - 1]!;
+  return scored[scored.length - 1]!.g;
 }
 
 export function selectNextChallenge(ctx: GeneratorContext): SessionChallenge {
-  const pool = getEnabledMetadata();
+  const pool = getMainMixMetadata();
+  const lastType = lastOf(ctx.playedInteractionTypes);
 
-  let eligible = pool.filter((g) => isEligible(g, ctx, true));
+  let eligible = pool.filter((g) => isEligible(g, ctx));
 
   if (eligible.length === 0) {
-    eligible = pool.filter((g) => g.id !== ctx.playedGameIds[ctx.playedGameIds.length - 1]);
+    eligible = pool.filter((g) => g.id !== lastOf(ctx.playedGameIds));
   }
 
   if (eligible.length === 0) {
-    eligible = pool;
+    eligible = [...pool];
   }
 
   const remaining = ctx.targetDurationMs - ctx.elapsedMs;
@@ -88,7 +111,12 @@ export function selectNextChallenge(ctx: GeneratorContext): SessionChallenge {
     if (short.length > 0) eligible = short;
   }
 
-  const picked = pickWeighted(eligible, ctx.seed);
+  if (lastType) {
+    const differentType = eligible.filter((g) => g.interactionType !== lastType);
+    if (differentType.length > 0) eligible = differentType;
+  }
+
+  const picked = pickWeightedByScore(eligible, ctx, ctx.seed);
 
   return {
     gameId: picked.id,

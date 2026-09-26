@@ -1,21 +1,42 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { Easing, FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 import { Screen } from '@/components/ui/Screen';
 import { Button } from '@/components/ui/Button';
-import { APP_NAME, TAGLINE } from '@/constants/app';
+import { APP_NAME } from '@/constants/app';
 import { getStats, type UserStats } from '@/storage/stats';
 import { getPreferences, saveDurationPreference } from '@/storage/preferences';
 import type { SessionDuration } from '@/types/session';
-import { colors, radius, spacing, typography } from '@/theme';
+import { colors, spacing, touchTargetMin, typography } from '@/theme';
+import { haptics } from '@/utils/haptics';
 
 const DURATIONS: SessionDuration[] = [1, 3, 5];
+
+function taglineFor(duration: SessionDuration): string {
+  if (duration === 1) return '1 dakikan varsa başlıyoruz.';
+  if (duration === 5) return '5 dakikan varsa başlıyoruz.';
+  return '3 dakikan varsa başlıyoruz.';
+}
+
+function ctaLabel(duration: SessionDuration): string {
+  return `${duration} DAKİKA BAŞLAT`;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const [duration, setDuration] = useState<SessionDuration>(3);
   const [stats, setStats] = useState<UserStats | null>(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', setReduceMotion);
+    return () => {
+      sub?.remove?.();
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -24,12 +45,24 @@ export default function HomeScreen() {
     }, []),
   );
 
+  const enter = useMemo(() => {
+    if (reduceMotion) return undefined;
+    return {
+      hero: FadeInDown.duration(280).easing(Easing.out(Easing.cubic)),
+      cta: FadeInUp.delay(80).duration(260).easing(Easing.out(Easing.cubic)),
+      footer: FadeIn.delay(140).duration(240),
+    };
+  }, [reduceMotion]);
+
   const handleDurationChange = (d: SessionDuration) => {
+    if (d === duration) return;
     setDuration(d);
     saveDurationPreference(d);
+    haptics.selection();
   };
 
   const handleStart = () => {
+    haptics.medium();
     router.push({ pathname: '/session', params: { duration: String(duration) } });
   };
 
@@ -39,64 +72,86 @@ export default function HomeScreen() {
   return (
     <Screen>
       <View style={styles.container}>
-        <View style={styles.hero}>
-          <Text style={styles.title}>{APP_NAME}</Text>
-          <Text style={styles.tagline}>{TAGLINE}</Text>
-        </View>
+        <Animated.View entering={enter?.hero} style={styles.hero}>
+          <Text
+            accessibilityRole="header"
+            accessibilityLabel={APP_NAME}
+            style={styles.word}
+          >
+            BOŞ
+          </Text>
+          <Text accessibilityElementsHidden style={styles.word}>
+            YAPMA.
+          </Text>
+          <Text style={styles.tagline}>{taglineFor(duration)}</Text>
+        </Animated.View>
 
-        <View style={styles.ctaSection}>
-          <Button label={`${duration} Dakika Başlat`} onPress={handleStart} style={styles.cta} />
+        <Animated.View entering={enter?.cta} style={styles.ctaSection}>
+          <Button label={ctaLabel(duration)} onPress={handleStart} style={styles.cta} />
 
-          <View style={styles.durationRow}>
-            {DURATIONS.map((d) => (
-              <Pressable
-                key={d}
-                accessibilityRole="button"
-                accessibilityState={{ selected: duration === d }}
-                onPress={() => handleDurationChange(d)}
-                style={[styles.durationChip, duration === d && styles.durationChipActive]}
-              >
-                <Text style={[styles.durationLabel, duration === d && styles.durationLabelActive]}>
-                  {d} dk
-                </Text>
-              </Pressable>
-            ))}
+          <View style={styles.segment} accessibilityRole="tablist">
+            {DURATIONS.map((d) => {
+              const selected = duration === d;
+              return (
+                <Pressable
+                  key={d}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`${d} dakika`}
+                  onPress={() => handleDurationChange(d)}
+                  style={({ pressed }) => [
+                    styles.segmentItem,
+                    selected && styles.segmentItemActive,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.segmentLabel, selected && styles.segmentLabelActive]}>
+                    {d} dk
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.footer}>
-          <Text style={styles.moodLabel}>Bugün ne lazım?</Text>
-          <View style={styles.moodRow}>
-            <View style={[styles.moodChip, styles.moodChipActive]}>
-              <Text style={styles.moodChipActiveText}>Karışık</Text>
-            </View>
-          </View>
-
+        <Animated.View entering={enter?.footer} style={styles.footer}>
           {showLastRound ? (
             <View style={styles.lastRound}>
-              <Text style={styles.lastRoundTitle}>Son tur</Text>
+              <Text style={styles.lastRoundKicker}>SON TUR</Text>
               {stats?.lastSessionReactionMs != null ? (
-                <Text style={styles.lastRoundLine}>Refleks: {stats.lastSessionReactionMs} ms</Text>
+                <View style={styles.lastRoundBlock}>
+                  <Text style={styles.lastRoundLabel}>Refleks</Text>
+                  <Text style={styles.lastRoundValue}>{stats.lastSessionReactionMs} ms</Text>
+                </View>
               ) : null}
               {stats?.lastSessionEstimateAccuracy != null ? (
-                <Text style={styles.lastRoundLine}>
-                  Tahmin: %{stats.lastSessionEstimateAccuracy}
-                </Text>
+                <View style={styles.lastRoundBlock}>
+                  <Text style={styles.lastRoundLabel}>Tahmin</Text>
+                  <Text style={styles.lastRoundValue}>%{stats.lastSessionEstimateAccuracy}</Text>
+                </View>
               ) : null}
               {stats?.lastSessionMemoryCorrect != null && stats.lastSessionMemoryTotal != null ? (
-                <Text style={styles.lastRoundLine}>
-                  Hafıza: {stats.lastSessionMemoryCorrect}/{stats.lastSessionMemoryTotal}
-                </Text>
+                <View style={styles.lastRoundBlock}>
+                  <Text style={styles.lastRoundLabel}>Hafıza</Text>
+                  <Text style={styles.lastRoundValue}>
+                    {stats.lastSessionMemoryCorrect}/{stats.lastSessionMemoryTotal}
+                  </Text>
+                </View>
               ) : null}
             </View>
           ) : null}
 
           {__DEV__ ? (
-            <Pressable onPress={() => router.push('/dev')} style={styles.devLink}>
+            <Pressable
+              onPress={() => router.push('/dev')}
+              style={styles.devLink}
+              accessibilityRole="button"
+              accessibilityLabel="Geliştirici oyun testi"
+            >
               <Text style={styles.devText}>DEV: Oyun testi</Text>
             </Pressable>
           ) : null}
-        </View>
+        </Animated.View>
       </View>
     </Screen>
   );
@@ -112,94 +167,80 @@ const styles = StyleSheet.create({
   hero: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.sm,
+    paddingTop: spacing.xxl,
   },
-  title: {
-    ...typography.hero,
-    textAlign: 'center',
+  word: {
+    fontSize: 56,
+    fontWeight: '800',
+    letterSpacing: -1.2,
+    lineHeight: 58,
+    color: colors.textPrimary,
   },
   tagline: {
     ...typography.body,
-    textAlign: 'center',
-    maxWidth: 280,
+    marginTop: spacing.md,
+    color: colors.textSecondary,
   },
   ctaSection: {
     gap: spacing.md,
-    alignItems: 'center',
   },
   cta: {
     width: '100%',
     paddingVertical: spacing.lg,
   },
-  durationRow: {
+  segment: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    alignSelf: 'center',
+    gap: spacing.xs,
   },
-  durationChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
+  segmentItem: {
     minWidth: 56,
+    minHeight: touchTargetMin,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  durationChipActive: {
-    borderColor: colors.accentPrimary,
-    backgroundColor: colors.accentPrimaryMuted,
+  segmentItemActive: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.textPrimary,
   },
-  durationLabel: {
+  segmentLabel: {
     ...typography.bodySmall,
     color: colors.textMuted,
   },
-  durationLabelActive: {
-    color: colors.accentPrimary,
+  segmentLabelActive: {
+    color: colors.textPrimary,
     fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.72,
   },
   footer: {
     paddingTop: spacing.xl,
-    gap: spacing.md,
-    minHeight: 120,
-  },
-  moodLabel: {
-    ...typography.label,
-    fontSize: 11,
-  },
-  moodRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  moodChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-  },
-  moodChipActive: {
-    borderColor: colors.accentPrimary,
-    backgroundColor: colors.accentPrimaryMuted,
-  },
-  moodChipActiveText: {
-    ...typography.bodySmall,
-    color: colors.accentPrimary,
-    fontWeight: '600',
+    minHeight: 96,
+    gap: spacing.lg,
   },
   lastRound: {
-    marginTop: spacing.md,
-    gap: spacing.xs,
+    gap: spacing.md,
   },
-  lastRoundTitle: {
+  lastRoundKicker: {
     ...typography.label,
     fontSize: 11,
+    letterSpacing: 1.6,
   },
-  lastRoundLine: {
+  lastRoundBlock: {
+    gap: 2,
+  },
+  lastRoundLabel: {
     ...typography.bodySmall,
+    color: colors.textMuted,
+  },
+  lastRoundValue: {
+    ...typography.heading,
+    fontSize: 22,
     fontVariant: ['tabular-nums'],
   },
   devLink: {
-    marginTop: spacing.md,
     paddingVertical: spacing.sm,
   },
   devText: {

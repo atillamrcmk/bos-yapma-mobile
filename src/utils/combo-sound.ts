@@ -1,34 +1,30 @@
-import { Audio, type AVPlaybackSource } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
 
-const COMBO_POP = require('../../assets/sounds/combo-pop.wav') as AVPlaybackSource;
+const COMBO_POP = require('../../assets/sounds/combo-pop.wav');
 
 const BASE_RATE = 1;
 const RATE_STEP = 0.08;
 const MAX_RATE = 1.8;
 
-let sound: Audio.Sound | null = null;
-let loading: Promise<Audio.Sound | null> | null = null;
+let sound: AudioPlayer | null = null;
+let loading: Promise<AudioPlayer | null> | null = null;
 
-async function ensureSound(): Promise<Audio.Sound | null> {
+async function ensureSound(): Promise<AudioPlayer | null> {
   if (Platform.OS === 'web') return null;
   if (sound) return sound;
   if (loading) return loading;
 
   loading = (async () => {
     try {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        allowsRecordingIOS: false,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: false,
+        shouldPlayInBackground: false,
+        interruptionModeAndroid: 'duckOthers',
       });
-      const { sound: created } = await Audio.Sound.createAsync(COMBO_POP, {
-        shouldPlay: false,
-        volume: 0.85,
-        isLooping: false,
-      });
+      const created = createAudioPlayer(COMBO_POP);
+      created.volume = 0.85;
       sound = created;
       return created;
     } catch {
@@ -51,10 +47,10 @@ export async function playComboSound(combo: number): Promise<void> {
   if (!instance) return;
 
   try {
-    const rate = rateForCombo(combo);
-    await instance.setPositionAsync(0);
-    await instance.setRateAsync(rate, false);
-    await instance.playAsync();
+    instance.shouldCorrectPitch = false;
+    instance.playbackRate = rateForCombo(combo);
+    await instance.seekTo(0);
+    instance.play();
   } catch {
     // Audio may be unavailable on simulators / restricted devices.
   }
@@ -63,7 +59,7 @@ export async function playComboSound(combo: number): Promise<void> {
 export async function unloadComboSound(): Promise<void> {
   if (!sound) return;
   try {
-    await sound.unloadAsync();
+    (sound as unknown as { release(): void }).release();
   } catch {
     // ignore
   }
